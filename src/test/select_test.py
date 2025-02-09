@@ -31,7 +31,7 @@ AsyncSessionLocal = sessionmaker(
 )
 
 
-async def select_and_display_all_tables():
+async def main():
     async with AsyncSessionLocal() as session:
         console = Console()
         models = [
@@ -76,4 +76,4 @@ async def select_and_display_all_tables():
 
 
 if __name__ == "__main__":
-    asyncio.run(select_and_display_all_tables())
+    asyncio.run(main())

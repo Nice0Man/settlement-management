@@ -133,14 +133,24 @@ async def add_task(session):
 
 
 async def add_personnel(session, infrastructure):
-    personnel = Personnel(
-        full_name="John Doe",
-        position="Engineer",
-        infrastructure_id=infrastructure.id,
-    )
-    session.add(personnel)
+    personnel_list = [
+        {"full_name": "Иван Петров", "position": "Инженер"},
+        {"full_name": "Анна Смирнова", "position": "Менеджер"},
+        {"full_name": "Сергей Иванов", "position": "Техник"},
+        {"full_name": "Екатерина Орлова", "position": "Аналитик"},
+        {"full_name": "Дмитрий Васильев", "position": "Руководитель"},
+    ]
+
+    for person in personnel_list:
+        personnel = Personnel(
+            full_name=person["full_name"],
+            position=person["position"],
+            infrastructure_id=infrastructure.id,
+        )
+        session.add(personnel)
+
     await session.commit()
-    console.print("[green]✔ Персонал добавлен[/green]")
+    console.print("[green]✔ Все сотрудники добавлены[/green]")
 
 
 async def add_event(session, settlement):
@@ -244,7 +254,7 @@ async def add_energy_system(session, infrastructure):
     console.print("[green]✔ Энергетические системы добавлены[/green]")
 
 
-async def populate_database():
+async def main():
     async with AsyncSessionLocal() as session:
         console.print("[bold cyan]Заполняем базу данных...[/bold cyan]")
 
@@ -261,7 +271,7 @@ async def populate_database():
         await add_logistic_route(session)
         await add_resource_plan(session, resources)
         await add_route(session)
-        await add_notification(session)
+        # await add_notification(session)
         await add_geozone(session)
         await add_energy_system(session, infrastructure)
 
@@ -269,4 +279,4 @@ async def populate_database():
 
 
 if __name__ == "__main__":
-    asyncio.run(populate_database())
+    asyncio.run(main())
