@@ -1,3 +1,6 @@
+from typing import Optional
+
+import Geometry
 from sqlalchemy import (
     Integer,
     String,
@@ -8,6 +11,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
+from geoalchemy2 import Geometry
 
 Base = declarative_base()
 
@@ -36,13 +40,12 @@ class Event(Base):
 
 class GeoZone(Base):
     __tablename__ = "geozones"
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
     type: Mapped[str] = mapped_column(String(50), nullable=False)
-    coordinates: Mapped[Text] = mapped_column(
-        Text
-    )  # Assuming geometry is stored as text
-    description: Mapped[Text] = mapped_column(Text, nullable=False)
+    coordinates: Mapped[Geometry] = mapped_column(Geometry("POLYGON"), nullable=False)
+    description: Mapped[str] = mapped_column(String(255), nullable=True)
     usage_type: Mapped[str] = mapped_column(String(50), nullable=False)
 
 

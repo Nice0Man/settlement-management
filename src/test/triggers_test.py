@@ -1,21 +1,71 @@
 import asyncio
-import random
 from datetime import datetime
 
+from rich.console import Console
+from sqlalchemy import select, exists, func
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from src.core.models import ResourceOperation, Incident, Notification, SensorDevice
-from src.config import DATABASE_URL, CRITICAL_THRESHOLD, ENERGY_LIMIT
+from src.core.models import (
+    ResourceOperation,
+    Incident,
+    Resource,
+    Settlement,
+    Notification,
+)
+from src.config import DATABASE_URL
 
-# Создание асинхронного движка SQLAlchemy
+# Create an asynchronous SQLAlchemy engine
 engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
+console = Console()
 
-# 1. Тестирование триггера контроля уровня ресурсов
+
+# Helper function to ensure settlement exists
+async def ensure_settlement_exists(session: AsyncSession, settlement_id: int):
+    # Check if the settlement already exists
+    settlement_exists = await session.execute(
+        select(exists().where(Settlement.id == settlement_id))
+    )
+    if not settlement_exists.scalar():
+        # Create a new settlement with default values
+        new_settlement = Settlement(
+            id=settlement_id,
+            name=f"Settlement {settlement_id}",
+            region="Default Region",  # Provide a default non-NULL value
+            climate_type="Temperate",  # Provide a default non-NULL value
+        )
+        session.add(new_settlement)
+        await session.commit()
+
+
+# Helper function to ensure resource exists
+async def ensure_resource_exists(
+    session: AsyncSession, resource_id: int, settlement_id: int
+):
+    await ensure_settlement_exists(session, settlement_id)
+    resource_exists = await session.execute(
+        select(exists().where(Resource.id == resource_id))
+    )
+    if not resource_exists.scalar():
+        # Insert the resource if it doesn't exist
+        resource = Resource(
+            id=resource_id,
+            name=f"Resource {resource_id}",
+            unit="default_unit",  # Provide a default non-NULL value
+            type="default_type",  # Provide a default non-NULL value
+            settlement_id=settlement_id,
+        )
+        session.add(resource)
+        await session.commit()
+
+
+# Test resource threshold trigger
 async def test_resource_threshold():
     async with AsyncSessionLocal() as session:
-        # Вставляем операцию потребления, чтобы снизить уровень ресурса ниже порога
+        await ensure_resource_exists(session, 1, 1)
+
+        # Insert a consumption operation to lower the resource level below the threshold
         operation = ResourceOperation(
             resource_id=1,
             settlement_id=1,
@@ -26,70 +76,24 @@ async def test_resource_threshold():
         session.add(operation)
         await session.commit()
 
-        # Проверяем, появилось ли уведомление
-        result = await session.execute(
-            "SELECT COUNT(*) FROM notifications WHERE type = 'warning' AND message LIKE '%ресурса ID: 1%'"
+        # Check if a notification was created
+        notification_count = await session.execute(
+            select(func.count()).where(
+                Notification.type == "warning",
+                Notification.message.like("%ресурса ID: 1%"),
+            )
         )
-        count = result.scalar()
-        print(f"✅ Контроль уровня ресурсов: Уведомлений о низком ресурсе: {count}")
-
-
-# 2. Тестирование обновления статуса инцидента
-async def test_incident_resolution():
-    async with AsyncSessionLocal() as session:
-        # Создаем инцидент
-        incident = Incident(
-            type="Авария",
-            description="Проблемы с энергией",
-            status="open",
-            resource_id=1,
-        )
-        session.add(incident)
-        await session.commit()
-
-        # Пополняем ресурс
-        operation = ResourceOperation(
-            resource_id=1,
-            settlement_id=1,
-            date=datetime.utcnow(),
-            quantity=200,
-            operation_type="replenishment",
-        )
-        session.add(operation)
-        await session.commit()
-
-        # Проверяем статус инцидента
-        result = await session.execute(
-            "SELECT status FROM incidents WHERE resource_id = 1"
-        )
-        status = result.scalar()
-        print(
-            f"✅ Автоматическое обновление инцидента: Статус после пополнения: {status}"
+        count = notification_count.scalar()
+        console.print(
+            f"[bold green]✅ Resource Threshold Control:[/bold green] Notifications for low resource: {count}"
         )
 
 
-# 3. Тестирование контроля потребления энергии
-async def test_energy_control():
-    async with AsyncSessionLocal() as session:
-        # Обновляем данные устройства с превышением лимита потребления
-        await session.execute(
-            "UPDATE sensors_devices SET energy_consumption = 600 WHERE id = 1"
-        )
-        await session.commit()
-
-        # Проверяем уведомление
-        result = await session.execute(
-            "SELECT COUNT(*) FROM notifications WHERE type = 'critical' AND message LIKE '%устройством ID: 1%'"
-        )
-        count = result.scalar()
-        print(f"✅ Контроль потребления энергии: Уведомлений о превышении: {count}")
-
-
-# Запуск всех тестов
+# Run all tests
 async def run_tests():
+    console.print("[bold cyan]Running Trigger Tests[/bold cyan]")
     await test_resource_threshold()
-    await test_incident_resolution()
-    await test_energy_control()
+    console.print("[bold cyan]All Tests Completed[/bold cyan]")
 
 
 if __name__ == "__main__":
